@@ -48,7 +48,7 @@
             </div>
             <div class="mt-12 -mb-16 sm:-mb-48 lg:m-0 lg:relative hidden lg:inline-flex">
               <div class="mx-auto max-w-md px-4 sm:max-w-2xl sm:px-6 lg:max-w-none lg:px-0">
-                <img class="w-full lg:absolute lg:inset-y-0 lg:left-0 lg:h-full lg:w-auto lg:max-w-none " src="undraw_Stock_prices_re_js33.svg" alt="">
+                <img class="w-full lg:absolute lg:inset-y-0 lg:left-0 lg:h-full lg:w-auto lg:max-w-none " src="/undraw_Stock_prices_re_js33.svg" alt="">
               </div>
             </div>
           </div>
@@ -156,6 +156,7 @@ const state = reactive({
 const saveAddress = () => {
   state.addresses.push( { address: state.address, rewards: 0, active: 0, balance: 0 } );
   fetchWallet();
+  state.address = "";
   localStorage.setItem("addresses", JSON.stringify(state.addresses));
 }
 
@@ -166,6 +167,14 @@ const removeAddress = (_addr) => {
       localStorage.setItem("addresses", JSON.stringify(state.addresses));
     }
   });
+  state.totalRewards = 0;
+  state.activeReward = 0;
+  state.addresses.forEach(function (address, index) {
+    state.rewards = 0;
+    state.active = 0;
+    state.balance = 0;
+  });
+
 }
 
 const fetchTransactions = () => {
