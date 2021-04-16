@@ -24,7 +24,7 @@
               <div class="lg:py-24">
                 <h1 class="mt-4 text-4xl tracking-tight font-extrabold text-white sm:mt-5 sm:text-6xl lg:mt-6 xl:text-6xl">
                   <span class="block">Count your CRO</span>
-                  <span class="block text-indigo-400">{{state.totalRewards}} CRO</span>
+                  <span class="block text-indigo-400">{{state.totalRewards.toFixed(2)}} CRO</span>
                 </h1>
                 <p class="mt-3 text-base text-gray-300 sm:mt-5 sm:text-xl lg:text-lg xl:text-xl">
                   Since it's hard to count crows I tried making it a bit simpler.
@@ -93,16 +93,19 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                           <div class="text-sm text-white">{{address.balance}} CRO</div>
+                          <div class="text-sm text-gray-500">${{ (address.balance * state.CROPrice).toFixed(2) }} USD</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                             {{address.rewards}} CRO
                           </span>
+                          <div class="text-sm text-gray-500">${{ (address.rewards * state.CROPrice).toFixed(2) }} USD</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                             {{address.active}} CRO
                           </span>
+                          <div class="text-sm text-gray-500">${{ (address.active * state.CROPrice).toFixed(2) }} USD</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button @click="removeAddress(address.address)" class="text-indigo-600 hover:text-indigo-900">
@@ -121,6 +124,65 @@
               </div>
             </div>
           </div>
+
+
+
+          <template v-for="address in state.addresses" v-bind:key="address.address">
+          <div class="flex flex-col mt-20">
+            <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+              <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
+                <div class="shadow overflow-hidden border-b border-gray-600 sm:rounded-lg">
+                  <table class="min-w-full divide-y divide-gray-600">
+                    <thead class="bg-gray-800">
+                      <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Transaction
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Reward
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Claimed at
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-gray-800 divide-y divide-gray-600">
+                      <template v-for="transaction in address.transactions" v-bind:key="transaction.hash">
+                      <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <div class="flex items-center">
+                            <div class="flex-shrink-0 h-10 w-10">
+                              <img src="https://assets.coingecko.com/coins/images/7310/large/cypto.png" class="h-10 w-10">
+                            </div>
+                            <div class="ml-4">
+                              <div class="text-sm font-medium text-white">
+                                <a v-bind:href="'https://crypto.org/explorer/tx/'+transaction.hash" target="_blank">{{transaction.hash}}</a>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            {{ ( transaction.messages[0].content.amount[0].amount / 100000000) }} CRO
+                          </span>
+                          <div class="text-sm text-gray-500">${{ (( transaction.messages[0].content.amount[0].amount / 100000000) * state.CROPrice).toFixed(2) }} USD</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div class="text-sm font-medium text-white">
+                            {{transaction.blockTime}}
+                          </div>
+                        </td>
+                      </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+
         </div>
       </div>
     </main>
@@ -149,12 +211,14 @@ const state = reactive({
   address: "",
   addresses: [],
   totalRewards: 0,
-  activeReward: 0
+  totalRewardsUsd: 0,
+  activeReward: 0,
+  CROPrice: 0,
 });
 
 
 const saveAddress = () => {
-  state.addresses.push( { address: state.address, rewards: 0, active: 0, balance: 0 } );
+  state.addresses.push( { address: state.address, rewards: 0, active: 0, balance: 0, transactions: [], page: 1, limit: 20, lastHeight: 0 } );
   fetchWallet();
   state.address = "";
   localStorage.setItem("addresses", JSON.stringify(state.addresses));
@@ -174,12 +238,48 @@ const removeAddress = (_addr) => {
     state.active = 0;
     state.balance = 0;
   });
-
 }
+
+const fetchTokenPrice = (vs) => {
+  axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=crypto-com-chain&vs_currencies=usd`)
+    .then(function (response) {
+      state.CROPrice = response.data['crypto-com-chain'].usd;
+    })
+    .catch(function (error) {
+      // handle error
+      console.log(error);
+    })
+    .then(function () {
+      // always executed
+    })
+}
+
+const fetchTransactionsRecursive = (address, index) => {
+  //state.addresses.forEach(function (address, index) {
+    console.log(`https://crypto.org/explorer/api/v1/accounts/${address.address}/transactions?pagination=offset&page=${address.page}&limit=${address.limit}&order=height.asc`);
+    axios.get(`https://crypto.org/explorer/api/v1/accounts/${address.address}/transactions?pagination=offset&page=${address.page}&limit=${address.limit}&order=height.asc`)
+    .then(function (response) {
+      state.addresses[index].transactions.push(response.data.result);
+      localStorage.setItem("addresses", JSON.stringify(state.addresses));
+      if(response.data.pagination.total_page > response.data.pagination.current_page) {
+        state.addresses[index].page++;
+        fetchTransactionsRecursive(address, index);
+      }
+    })
+    .catch(function (error) {
+      // handle error
+      console.log(error);
+    })
+    .then(function () {
+      // always executed
+    })
+  //})
+}
+
 
 const fetchTransactions = () => {
   state.addresses.forEach(function (address, index) {
-    axios.get(`https://crypto.org/explorer/api/v1/accounts/${address.address}/transactions?pagination=offset&page=1&limit=100&order=height.desc`)
+    axios.get(`https://crypto.org/explorer/api/v1/accounts/${address.address}/transactions?pagination=offset&page=1&limit=1000&order=height.asc`)
     .then(function (response) {
 
       if(index == 0) {
@@ -187,10 +287,10 @@ const fetchTransactions = () => {
       }
 
       let rewards = 0;
-      
+      state.addresses[index].transactions = [];
       response.data.result.forEach(transaction => {
         if(transaction.messages[0].content.name == "MsgWithdrawDelegatorRewardCreated") {
-
+          state.addresses[index].transactions.push(transaction);
           rewards += Math.round( (parseFloat(transaction.messages[0].content.amount[0].amount) / 100000000) * 100,2) / 100; 
         }
       });
@@ -242,6 +342,8 @@ const fetchWallet = () => {
     .then(function () {
       // always executed
     });
+    //console.log("FETCH RECURSIVE!");
+    //fetchTransactionsRecursive(address, index);
   });
   fetchTransactions();
 }
@@ -250,6 +352,7 @@ if(localStorage.getItem("addresses") !== null) {
   state.addresses = JSON.parse(localStorage.getItem("addresses"));
   fetchWallet();
 }
+fetchTokenPrice();
 
   setInterval(() => {
     fetchWallet()
